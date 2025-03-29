@@ -9,6 +9,7 @@ app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3000;
 
+// VAPID anahtarları
 const publicVapidKey = "BBmkso1ixwQ8On7uqdmz8wNuwHloZMhwoRRWcQKNGvyijIlsbEwZf1-SVl0BqbBvhbRqFUz5_f31eSTHCmAj2ic";
 const privateVapidKey = "L93WoCAlXlFyLVk56LhB1PruElgLlxJ7XJN1EENXhng";
 
@@ -18,24 +19,28 @@ webpush.setVapidDetails(
   privateVapidKey
 );
 
+// Bellekte tutulacak kullanıcı listesi
 let kullanicilar = {};
 
-// Kullanıcı Kaydı (ad zorunlu değil, subscription opsiyonel)
+// ✅ Kullanıcı kaydı
 app.post("/kayit", (req, res) => {
   const { id, ad, subscription } = req.body;
 
-  if (!id) return res.status(400).json({ error: "ID zorunlu." });
+  if (!id) {
+    return res.status(400).json({ error: "ID zorunludur." });
+  }
 
+  // Üstüne yaz
   kullanicilar[id] = {
     ad: ad || "Bilinmeyen",
     subscription: subscription || null
   };
 
-  console.log("✅ Kayıt edildi:", id, ad);
+  console.log(`📌 Kayıt: ${id} (${ad}) – Subscription: ${subscription ? "✅ VAR" : "❌ YOK"}`);
   res.sendStatus(201);
 });
 
-// Kayıtlı kullanıcıları listele (ad + id)
+// ✅ Kayıtlı kullanıcıları getir
 app.get("/kullanicilar", (req, res) => {
   const liste = Object.entries(kullanicilar).map(([id, veri]) => ({
     id,
@@ -44,24 +49,26 @@ app.get("/kullanicilar", (req, res) => {
   res.json(liste);
 });
 
-// Tüm kayıtları sil
+// ✅ Tüm kullanıcıları sil
 app.delete("/kullanicilar", (req, res) => {
   kullanicilar = {};
   console.log("🗑️ Tüm kullanıcılar silindi.");
   res.sendStatus(200);
 });
 
-// Mesaj gönderme
+// ✅ Mesaj gönder (push notification)
 app.post("/gonder", async (req, res) => {
   const { hedefID, mesaj } = req.body;
 
   if (!hedefID || !mesaj) {
-    return res.status(400).json({ error: "Eksik bilgi" });
+    return res.status(400).json({ error: "Eksik bilgi gönderildi." });
   }
 
   const kayit = kullanicilar[hedefID];
+
   if (!kayit || !kayit.subscription) {
-    return res.status(404).json({ error: "Kullanıcı bulunamadı" });
+    console.log(`❌ Hedef bulunamadı veya subscription yok: ${hedefID}`);
+    return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   }
 
   try {
@@ -73,11 +80,12 @@ app.post("/gonder", async (req, res) => {
     console.log(`📨 Mesaj gönderildi → ${hedefID}`);
     res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Push gönderim hatası:", err);
+    console.error("❌ Push gönderme hatası:", err);
     res.sendStatus(500);
   }
 });
 
+// ✅ Sunucuyu başlat
 app.listen(PORT, () => {
   console.log(`🚀 Sunucu çalışıyor: http://localhost:${PORT}`);
 });
