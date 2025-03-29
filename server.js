@@ -19,13 +19,21 @@ webpush.setVapidDetails(
   privateVapidKey
 );
 
-// Kullanıcıları oda bazında tutmak için:
+// Kullanıcıları ve mesajları oda bazında tutmak için:
 const kullanicilar = {};
+const mesajlar = {}; // 🆕 Oda bazlı mesaj geçmişi
 
 // 👉 Kayıt al: oda + id + abonelik
 app.post("/kayit", (req, res) => {
   const { oda, id, subscription } = req.body;
+
   if (!kullanicilar[oda]) kullanicilar[oda] = {};
+
+  // 🛑 Aynı kullanıcı adı varsa hata döndür
+  if (kullanicilar[oda][id]) {
+    return res.status(409).json({ error: "Bu kullanıcı adı zaten kullanımda." });
+  }
+
   kullanicilar[oda][id] = subscription;
   res.sendStatus(201);
 });
@@ -37,7 +45,7 @@ app.get("/kullanicilar", (req, res) => {
   res.json(Object.keys(kullanicilar[oda]));
 });
 
-// 👉 Push gönder
+// 👉 Push gönder ve mesajı kaydet
 app.post("/gonder", async (req, res) => {
   const { oda, hedefID, mesaj } = req.body;
 
@@ -53,11 +61,23 @@ app.post("/gonder", async (req, res) => {
       title: "Yeni Mesaj",
       body: mesaj
     }));
+
+    // 🆕 Mesajı oda bazlı bellekte sakla
+    if (!mesajlar[oda]) mesajlar[oda] = [];
+    mesajlar[oda].push(mesaj);
+
     res.sendStatus(200);
   } catch (err) {
     console.error("❌ Push gönderme hatası:", err);
     res.sendStatus(500);
   }
+});
+
+// 👉 Oda bazlı geçmiş mesajları getir
+app.get("/mesajlar", (req, res) => {
+  const oda = req.query.oda;
+  if (!oda || !mesajlar[oda]) return res.json([]);
+  res.json(mesajlar[oda]);
 });
 
 app.listen(PORT, () => {
