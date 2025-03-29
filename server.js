@@ -9,7 +9,6 @@ app.use(bodyParser.json());
 
 const PORT = process.env.PORT || 3000;
 
-// ✅ VAPID Anahtarları
 const publicVapidKey = "BBmkso1ixwQ8On7uqdmz8wNuwHloZMhwoRRWcQKNGvyijIlsbEwZf1-SVl0BqbBvhbRqFUz5_f31eSTHCmAj2ic";
 const privateVapidKey = "L93WoCAlXlFyLVk56LhB1PruElgLlxJ7XJN1EENXhng";
 
@@ -19,27 +18,24 @@ webpush.setVapidDetails(
   privateVapidKey
 );
 
-// 📦 Tüm kullanıcı kayıtları burada tutulur
 let kullanicilar = {};
 
-// ✅ Kullanıcı Kaydı (ID + Ad + Subscription)
+// Kullanıcı Kaydı (ad zorunlu değil, subscription opsiyonel)
 app.post("/kayit", (req, res) => {
   const { id, ad, subscription } = req.body;
 
-  if (!id || !subscription) {
-    return res.status(400).json({ error: "Eksik bilgi gönderildi." });
-  }
+  if (!id) return res.status(400).json({ error: "ID zorunlu." });
 
   kullanicilar[id] = {
     ad: ad || "Bilinmeyen",
-    subscription
+    subscription: subscription || null
   };
 
-  console.log(`✅ Kayıt eklendi: ${id} (${ad})`);
+  console.log("✅ Kayıt edildi:", id, ad);
   res.sendStatus(201);
 });
 
-// ✅ Kayıtlı kullanıcıları listele (ID + Ad)
+// Kayıtlı kullanıcıları listele (ad + id)
 app.get("/kullanicilar", (req, res) => {
   const liste = Object.entries(kullanicilar).map(([id, veri]) => ({
     id,
@@ -48,24 +44,24 @@ app.get("/kullanicilar", (req, res) => {
   res.json(liste);
 });
 
-// ✅ Tüm kullanıcıları sil
+// Tüm kayıtları sil
 app.delete("/kullanicilar", (req, res) => {
   kullanicilar = {};
-  console.log("🗑️ Tüm kullanıcılar sunucudan silindi.");
+  console.log("🗑️ Tüm kullanıcılar silindi.");
   res.sendStatus(200);
 });
 
-// ✅ Push mesaj gönderme
+// Mesaj gönderme
 app.post("/gonder", async (req, res) => {
   const { hedefID, mesaj } = req.body;
 
   if (!hedefID || !mesaj) {
-    return res.status(400).json({ error: "Eksik bilgi gönderildi." });
+    return res.status(400).json({ error: "Eksik bilgi" });
   }
 
   const kayit = kullanicilar[hedefID];
   if (!kayit || !kayit.subscription) {
-    return res.status(404).json({ error: "Kullanıcı bulunamadı." });
+    return res.status(404).json({ error: "Kullanıcı bulunamadı" });
   }
 
   try {
@@ -77,7 +73,7 @@ app.post("/gonder", async (req, res) => {
     console.log(`📨 Mesaj gönderildi → ${hedefID}`);
     res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Push gönderme hatası:", err);
+    console.error("❌ Push gönderim hatası:", err);
     res.sendStatus(500);
   }
 });
