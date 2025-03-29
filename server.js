@@ -18,35 +18,38 @@ webpush.setVapidDetails(
   privateVapidKey
 );
 
+// ✅ Tüm kullanıcılar tek alanda
 const kullanicilar = {};
-const mesajlar = {};
 
+// ✅ Kullanıcı kayıt endpointi
 app.post("/kayit", (req, res) => {
-  const { oda, id, subscription } = req.body;
+  const { id, subscription } = req.body;
 
-  if (!kullanicilar[oda]) kullanicilar[oda] = {};
-  if (kullanicilar[oda][id]) {
-    return res.status(409).json({ error: "Bu kullanıcı adı zaten kullanımda." });
+  if (!id || !subscription) {
+    return res.status(400).json({ error: "Eksik bilgi" });
   }
 
-  kullanicilar[oda][id] = subscription;
-  res.sendStatus(201);
+  kullanicilar[id] = subscription;
+  return res.sendStatus(201);
 });
 
+// ✅ Kayıtlı kullanıcı listesi (test paneli için)
 app.get("/kullanicilar", (req, res) => {
-  const oda = req.query.oda;
-  if (!oda || !kullanicilar[oda]) return res.json([]);
-  res.json(Object.keys(kullanicilar[oda]));
+  res.json(Object.keys(kullanicilar));
 });
 
+// ✅ Mesaj gönderme
 app.post("/gonder", async (req, res) => {
-  const { oda, hedefID, mesaj } = req.body;
+  const { hedefID, mesaj } = req.body;
 
-  if (!kullanicilar[oda] || !kullanicilar[oda][hedefID]) {
-    return res.status(404).json({ error: "Kullanıcı bulunamadı" });
+  if (!hedefID || !mesaj) {
+    return res.status(400).json({ error: "Eksik bilgi" });
   }
 
-  const subscription = kullanicilar[oda][hedefID];
+  const subscription = kullanicilar[hedefID];
+  if (!subscription) {
+    return res.status(404).json({ error: "Hedef kullanıcı bulunamadı" });
+  }
 
   try {
     await webpush.sendNotification(subscription, JSON.stringify({
@@ -54,22 +57,13 @@ app.post("/gonder", async (req, res) => {
       body: mesaj
     }));
 
-    if (!mesajlar[oda]) mesajlar[oda] = [];
-    mesajlar[oda].push(mesaj);
-
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (err) {
-    console.error("❌ Push gönderme hatası:", err);
-    res.sendStatus(500);
+    console.error("Push gönderme hatası:", err);
+    return res.sendStatus(500);
   }
 });
 
-app.get("/mesajlar", (req, res) => {
-  const oda = req.query.oda;
-  if (!oda || !mesajlar[oda]) return res.json([]);
-  res.json(mesajlar[oda]);
-});
-
 app.listen(PORT, () => {
-  console.log(`📡 Push chat server çalışıyor: http://localhost:${PORT}`);
+  console.log(`✅ Push sunucusu çalışıyor: http://localhost:${PORT}`);
 });
