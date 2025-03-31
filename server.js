@@ -1,91 +1,69 @@
 ﻿const express = require("express");
-const webpush = require("web-push");
 const bodyParser = require("body-parser");
+const webpush = require("web-push");
 const cors = require("cors");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-const PORT = process.env.PORT || 3000;
+const kullanicilar = {}; // Kullanıcı verileri burada tutulur
 
-// VAPID anahtarları
-const publicVapidKey = "BBmkso1ixwQ8On7uqdmz8wNuwHloZMhwoRRWcQKNGvyijIlsbEwZf1-SVl0BqbBvhbRqFUz5_f31eSTHCmAj2ic";
-const privateVapidKey = "L93WoCAlXlFyLVk56LhB1PruElgLlxJ7XJN1EENXhng";
+// VAPID anahtarları (senin gönderdiklerinle)
+const publicKey = "BKkVIG7cKX5koqIJqDeYl03C4Dp3CegbcB-q7vN8r_rFqOBgvuHEj3YlHPo3as7TXDsiMek_5Zjo2lWfS43q6WQ";
+const privateKey = "oFezt6FfCNmK2O2pAZI2aI0ZKLNCCSGqEnBLKrDbyNc";
 
 webpush.setVapidDetails(
-  "mailto:example@yourdomain.org",
-  publicVapidKey,
-  privateVapidKey
+  "mailto:example@example.com",
+  publicKey,
+  privateKey
 );
 
-// Bellekte tutulacak kullanıcı listesi
-let kullanicilar = {};
-
-// ✅ Kullanıcı kaydı
+// ✅ KULLANICI KAYDI
 app.post("/kayit", (req, res) => {
   const { id, ad, subscription } = req.body;
-
-  if (!id) {
-    return res.status(400).json({ error: "ID zorunludur." });
+  if (!id || !subscription) {
+    return res.status(400).json({ error: "Eksik veri" });
   }
-
-  // Üstüne yaz
-  kullanicilar[id] = {
-    ad: ad || "Bilinmeyen",
-    subscription: subscription || null
-  };
-
-  console.log(`📌 Kayıt: ${id} (${ad}) – Subscription: ${subscription ? "✅ VAR" : "❌ YOK"}`);
-  res.sendStatus(201);
+  kullanicilar[id] = { ad, subscription };
+  res.send("✅ Kullanıcı kaydedildi");
 });
 
-// ✅ Kayıtlı kullanıcıları getir
-app.get("/kullanicilar", (req, res) => {
-  const liste = Object.entries(kullanicilar).map(([id, veri]) => ({
-    id,
-    ad: veri.ad || "Bilinmeyen"
-  }));
-  res.json(liste);
-});
-
-// ✅ Tüm kullanıcıları sil
-app.delete("/kullanicilar", (req, res) => {
-  kullanicilar = {};
-  console.log("🗑️ Tüm kullanıcılar silindi.");
-  res.sendStatus(200);
-});
-
-// ✅ Mesaj gönder (push notification)
-app.post("/gonder", async (req, res) => {
+// ✅ BİLDİRİM GÖNDER
+app.post("/gonder", (req, res) => {
   const { hedefID, mesaj } = req.body;
+  const hedef = kullanicilar[hedefID];
 
-  if (!hedefID || !mesaj) {
-    return res.status(400).json({ error: "Eksik bilgi gönderildi." });
-  }
-
-  const kayit = kullanicilar[hedefID];
-
-  if (!kayit || !kayit.subscription) {
-    console.log(`❌ Hedef bulunamadı veya subscription yok: ${hedefID}`);
+  if (!hedef || !hedef.subscription) {
     return res.status(404).json({ error: "Kullanıcı bulunamadı." });
   }
 
-  try {
-    await webpush.sendNotification(kayit.subscription, JSON.stringify({
-      title: "Yeni Mesaj",
-      body: mesaj
-    }));
+  const payload = JSON.stringify({ mesaj });
 
-    console.log(`📨 Mesaj gönderildi → ${hedefID}`);
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ Push gönderme hatası:", err);
-    res.sendStatus(500);
-  }
+  webpush.sendNotification(hedef.subscription, payload)
+    .then(() => res.send("📨 Bildirim gönderildi"))
+    .catch(err => {
+      console.error("❌ Bildirim hatası:", err);
+      res.status(500).json({ error: "Bildirim gönderilemedi" });
+    });
 });
 
-// ✅ Sunucuyu başlat
+// ✅ KULLANICILARI LİSTELE (YENİ)
+app.get("/kullanicilar", (req, res) => {
+  const ozet = {};
+  for (const [id, user] of Object.entries(kullanicilar)) {
+    ozet[id] = { ad: user.ad || "Bilinmiyor" };
+  }
+  res.json(ozet);
+});
+
+// (İsteğe bağlı) Tüm kullanıcıları temizle
+app.delete("/kullanicilar", (req, res) => {
+  Object.keys(kullanicilar).forEach(k => delete kullanicilar[k]);
+  res.send("🚫 Tüm kullanıcılar silindi.");
+});
+
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Sunucu çalışıyor: http://localhost:${PORT}`);
+  console.log(`🚀 Sunucu ${PORT} portunda çalışıyor`);
 });
