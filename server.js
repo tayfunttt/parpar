@@ -1,91 +1,48 @@
-﻿const express = require("express");
-const webpush = require("web-push");
-const bodyParser = require("body-parser");
-const cors = require("cors");
+﻿const WebSocket = require('ws');
+const wss = new WebSocket.Server({ port: 3000 });
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+const rooms = {};
 
-const PORT = process.env.PORT || 3000;
+wss.on('connection', socket => {
+  socket.on('message', message => {
+    let data;
+    try {
+      data = JSON.parse(message);
+    } catch (e) {
+      console.error('Invalid JSON:', message);
+      return;
+    }
 
-// VAPID anahtarları
-const publicVapidKey = "BBmkso1ixwQ8On7uqdmz8wNuwHloZMhwoRRWcQKNGvyijIlsbEwZf1-SVl0BqbBvhbRqFUz5_f31eSTHCmAj2ic";
-const privateVapidKey = "L93WoCAlXlFyLVk56LhB1PruElgLlxJ7XJN1EENXhng";
+    const { type, room, payload } = data;
 
-webpush.setVapidDetails(
-  "mailto:example@yourdomain.org",
-  publicVapidKey,
-  privateVapidKey
-);
+    switch (type) {
+      case 'join':
+        if (!rooms[room]) rooms[room] = [];
+        rooms[room].push(socket);
+        socket.room = room;
+        break;
 
-// Bellekte tutulacak kullanıcı listesi
-let kullanicilar = {};
+      case 'signal':
+        if (rooms[room]) {
+          rooms[room].forEach(peer => {
+            if (peer !== socket && peer.readyState === WebSocket.OPEN) {
+              peer.send(JSON.stringify({ type: 'signal', payload }));
+            }
+          });
+        }
+        break;
+    }
+  });
 
-// ✅ Kullanıcı kaydı
-app.post("/kayit", (req, res) => {
-  const { id, ad, subscription } = req.body;
-
-  if (!id) {
-    return res.status(400).json({ error: "ID zorunludur." });
-  }
-
-  // Üstüne yaz
-  kullanicilar[id] = {
-    ad: ad || "Bilinmeyen",
-    subscription: subscription || null
-  };
-
-  console.log(`📌 Kayıt: ${id} (${ad}) – Subscription: ${subscription ? "✅ VAR" : "❌ YOK"}`);
-  res.sendStatus(201);
+  socket.on('close', () => {
+    const room = socket.room;
+    if (room && rooms[room]) {
+      rooms[room] = rooms[room].filter(peer => peer !== socket);
+      if (rooms[room].length === 0) {
+        delete rooms[room];
+      }
+    }
+  });
 });
 
-// ✅ Kayıtlı kullanıcıları getir
-app.get("/kullanicilar", (req, res) => {
-  const liste = Object.entries(kullanicilar).map(([id, veri]) => ({
-    id,
-    ad: veri.ad || "Bilinmeyen"
-  }));
-  res.json(liste);
-});
-
-// ✅ Tüm kullanıcıları sil
-app.delete("/kullanicilar", (req, res) => {
-  kullanicilar = {};
-  console.log("🗑️ Tüm kullanıcılar silindi.");
-  res.sendStatus(200);
-});
-
-// ✅ Mesaj gönder (push notification)
-app.post("/gonder", async (req, res) => {
-  const { hedefID, mesaj } = req.body;
-
-  if (!hedefID || !mesaj) {
-    return res.status(400).json({ error: "Eksik bilgi gönderildi." });
-  }
-
-  const kayit = kullanicilar[hedefID];
-
-  if (!kayit || !kayit.subscription) {
-    console.log(`❌ Hedef bulunamadı veya subscription yok: ${hedefID}`);
-    return res.status(404).json({ error: "Kullanıcı bulunamadı." });
-  }
-
-  try {
-    await webpush.sendNotification(kayit.subscription, JSON.stringify({
-      title: "Yeni Mesaj",
-      body: mesaj
-    }));
-
-    console.log(`📨 Mesaj gönderildi → ${hedefID}`);
-    res.sendStatus(200);
-  } catch (err) {
-    console.error("❌ Push gönderme hatası:", err);
-    res.sendStatus(500);
-  }
-});
-
-// ✅ Sunucuyu başlat
-app.listen(PORT, () => {
-  console.log(`🚀 Sunucu çalışıyor: http://localhost:${PORT}`);
-});
+console.log('Signaling server started on ws://localhost:3000');
