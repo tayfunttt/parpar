@@ -1,29 +1,43 @@
 ﻿const express = require("express");
 const http = require("http");
 const socketIo = require("socket.io");
+const cors = require("cors");
 const fs = require("fs");
 const webPush = require("web-push");
 
 const app = express();
-const server = http.createServer(app);
-const io = socketIo(server);
 
-// VAPID key üretmek için bir kere çalıştır sonra bunları sakla
+// 🚨 CORS middleware - frontend domainine izin veriyoruz
+app.use(cors({
+  origin: "https://parpar.it",
+  methods: ["GET", "POST"],
+  credentials: true
+}));
+
+const server = http.createServer(app);
+
+// 🎯 socket.io için de CORS ayarı şart!
+const io = socketIo(server, {
+  cors: {
+    origin: "https://parpar.it",
+    methods: ["GET", "POST"],
+    credentials: true
+  }
+});
+
+// VAPID Key ayarı (senin key'ler zaten doğru yerleştirilmiş)
 webPush.setVapidDetails(
   "mailto:you@example.com",
-  "BMYLktPLerCw_7_1ucqHoTjuoRq-JNWwRDb0kyRE3A_NqXSk6sssDjCLPJsTaJkfXVZMC2Lvrn_SNGNsgoFfe_Q",  // VAPID public key
-  "yS0l3kmTelAEEKIiycpWhi8hgxwFGPKOdfdQ85tEGFU"  // VAPID private key
+  "BMYLktPLerCw_7_1ucqHoTjuoRq-JNWwRDb0kyRE3A_NqXSk6sssDjCLPJsTaJkfXVZMC2Lvrn_SNGNsgoFfe_Q",
+  "yS0l3kmTelAEEKIiycpWhi8hgxwFGPKOdfdQ85tEGFU"
 );
 
-// Kullanıcıların push subscription bilgileri (dosyada tutulabilir)
-let subscriptions = {}; // { userId: pushSubscription }
-let onlineUsers = {};   // { userId: socket.id }
+let subscriptions = {};
+let onlineUsers = {};
 
-// Middleware
 app.use(express.json());
-app.use(express.static("public")); // frontend buradan sunulur
+app.use(express.static("public"));
 
-// Push subscription'ı kayıt eden endpoint
 app.post("/subscribe", (req, res) => {
   const { userId, subscription } = req.body;
   subscriptions[userId] = subscription;
@@ -31,7 +45,6 @@ app.post("/subscribe", (req, res) => {
   res.status(201).json({ message: "Subscription saved." });
 });
 
-// Socket bağlantısı
 io.on("connection", (socket) => {
   console.log("Yeni bağlantı:", socket.id);
 
@@ -46,7 +59,6 @@ io.on("connection", (socket) => {
     if (onlineUsers[to]) {
       io.to(onlineUsers[to]).emit("receiveMessage", msgData);
     } else {
-      // Offline mesajı kaydet
       const filePath = `./log-${to}.json`;
       let log = [];
 
@@ -57,14 +69,13 @@ io.on("connection", (socket) => {
       log.push(msgData);
       fs.writeFileSync(filePath, JSON.stringify(log));
 
-      // Push bildirimi gönder
       if (subscriptions[to]) {
         const payload = JSON.stringify({
           title: "Yeni mesaj!",
-          body: `${from} seni arıyor.`,
+          body: `${from} seni arıyor.`
         });
 
-        webPush.sendNotification(subscriptions[to], payload).catch((err) => {
+        webPush.sendNotification(subscriptions[to], payload).catch(err => {
           console.error("Push gönderilemedi:", err);
         });
       }
@@ -76,7 +87,7 @@ io.on("connection", (socket) => {
     if (fs.existsSync(filePath)) {
       const messages = JSON.parse(fs.readFileSync(filePath));
       socket.emit("offlineMessages", messages);
-      fs.unlinkSync(filePath); // Gösterildikten sonra sil
+      fs.unlinkSync(filePath);
     }
   });
 
