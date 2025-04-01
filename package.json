@@ -1,20 +1,11 @@
 {
-  "name": "chatx",
+  "name": "chatx-server",
   "version": "1.0.0",
-  "description": "Gerçek zamanlı chat ve offline push bildirim destekli uygulama",
+  "description": "Socket.io ve Web Push destekli basit chat uygulaması",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": [
-    "chat",
-    "socket.io",
-    "web-push",
-    "nodejs",
-    "express"
-  ],
-  "author": "SeninAdın",
-  "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",

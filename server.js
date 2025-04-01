@@ -7,25 +7,26 @@ const webPush = require("web-push");
 
 const app = express();
 
-// 🚨 CORS middleware - frontend domainine izin veriyoruz
+// CORS ayarı (frontend alan adını burada belirt)
 app.use(cors({
   origin: "https://parpar.it",
-  methods: ["GET", "POST"],
-  credentials: true
+  methods: ["GET", "POST"]
 }));
+
+app.use(express.json());
+app.use(express.static("public"));
 
 const server = http.createServer(app);
 
-// 🎯 socket.io için de CORS ayarı şart!
+// Socket.IO CORS ayarı
 const io = socketIo(server, {
   cors: {
     origin: "https://parpar.it",
-    methods: ["GET", "POST"],
-    credentials: true
+    methods: ["GET", "POST"]
   }
 });
 
-// VAPID Key ayarı (senin key'ler zaten doğru yerleştirilmiş)
+// VAPID bilgileri — kendine ait olanları buraya koy
 webPush.setVapidDetails(
   "mailto:you@example.com",
   "BMYLktPLerCw_7_1ucqHoTjuoRq-JNWwRDb0kyRE3A_NqXSk6sssDjCLPJsTaJkfXVZMC2Lvrn_SNGNsgoFfe_Q",
@@ -35,13 +36,10 @@ webPush.setVapidDetails(
 let subscriptions = {};
 let onlineUsers = {};
 
-app.use(express.json());
-app.use(express.static("public"));
-
 app.post("/subscribe", (req, res) => {
   const { userId, subscription } = req.body;
   subscriptions[userId] = subscription;
-  fs.writeFileSync("subscriptions.json", JSON.stringify(subscriptions));
+  fs.writeFileSync("subscriptions.json", JSON.stringify(subscriptions, null, 2));
   res.status(201).json({ message: "Subscription saved." });
 });
 
@@ -67,7 +65,7 @@ io.on("connection", (socket) => {
       }
 
       log.push(msgData);
-      fs.writeFileSync(filePath, JSON.stringify(log));
+      fs.writeFileSync(filePath, JSON.stringify(log, null, 2));
 
       if (subscriptions[to]) {
         const payload = JSON.stringify({
